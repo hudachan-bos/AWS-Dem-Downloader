@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Resolution Tile Viewer v4</title>
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; background-color: #eee; }
+        #map-container { position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab; background-color: #ccc; image-rendering: pixelated; }
+        #map-container.dragging { cursor: grabbing; }
+        #tile-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; -ms-user-select: none; transform-origin: 0 0; will-change: transform; }
+        .tile-wrapper { position: absolute; overflow: hidden; will-change: transform; }
+        .tile-image { display: block; width: 100%; height: 100%; user-select: none; pointer-events: none; background-color: #ddd; image-rendering: pixelated; }
+        .tile-coords { position: absolute; top: 2px; right: 2px; background-color: rgba(0, 0, 0, 0.7); color: white; font-size: 10px; padding: 1px 3px; border-radius: 2px; pointer-events: none; z-index: 1; white-space: nowrap; font-family: monospace; }
+        .custom-zoom { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.65); }
+        .custom-zoom button { display: block; width: 30px; height: 30px; font-size: 18px; font-weight: bold; border: none; background-color: white; cursor: pointer; line-height: 30px; text-align: center; }
+        .custom-zoom button:first-child { border-bottom: 1px solid #ccc; border-radius: 4px 4px 0 0; }
+        .custom-zoom button:last-child { border-radius: 0 0 4px 4px; }
+        .custom-zoom button:hover { background-color: #f4f4f4; }
+        .custom-zoom button:disabled { cursor: default; background-color: #eee; color: #aaa; }
+        #loading-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(255, 255, 255, 0.8); padding: 10px 20px; border-radius: 5px; z-index: 2000; display: none; }
+        #debug-info { position: absolute; bottom: 10px; right: 10px; background-color: rgba(255, 255, 255, 0.8); padding: 5px; border-radius: 3px; font-size: 12px; z-index: 1000; }
+    </style>
+</head>
+<body>
+    <div id="map-container">
+        <div id="tile-container"></div>
+    </div>
+    <div class="custom-zoom">
+        <button id="zoom-in" title="Increase detail">+</button>
+        <button id="zoom-out" title="Decrease detail">-</button>
+    </div>
+    <div id="loading-indicator">Loading...</div>
+    <div id="debug-info"></div>
+
+    <script>
+        // --- Configuration ---
+        const tilesJsonPath = './terrain_tiles/tiles.json';
+        const tilePath = './terrain_tiles/{z}/{x}/{y}.png';
+        const TILE_SIZE = 256;
+        const DEBUG = true; // Set to true to show debug info
+
+        // --- DOM Elements ---
+        const mapContainer = document.getElementById('map-container');
+        const tileContainer = document.getElementById('tile-container');
+        const zoomInButton = document.getElementById('zoom-in');
+        const zoomOutButton = document.getElementById('zoom-out');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const debugInfo = document.getElementById('debug-info');
+
+        // --- State Variables ---
+        let config = null;
+        let currentZoom = 10;
+        let minZoom = 0;
+        let maxZoom = 15;
+        let centerLat = 0;
+        let centerLon = 0;
+        let viewportWidth = mapContainer.clientWidth;
+        let viewportHeight = mapContainer.clientHeight;
+        let isDragging = false;
+        let startDragX = 0, startDragY = 0;
+        let startDragLat = 0, startDragLon = 0;
+        let tileLoadCounter = 0;
+        let tilesAttempted = 0;
+        let lastFrameTime = 0;
+        let frameCount = 0;
+        let fps = 0;
+        let tileUpdateScheduled = false;
+        let dragDeltaX = 0, dragDeltaY = 0;
+        
+        // Use a Map for better performance with large numbers of tiles
+        const activeTiles = new Map();
+        
+        // Create a tile pool for reusing DOM elements
+        const tilePool = [];
+        const MAX_POOLED_TILES = 50;
+
+        // --- Utility Functions ---
+        function latLonToWorldPixel(lat_deg, lon_deg, zoom) {
+            const lat_rad = lat_deg * Math.PI / 180;
+            const n = Math.pow(2, zoom);
+            const worldSize = n * TILE_SIZE;
+            let x = (lon_deg + 180.0) / 360.0 * worldSize;
+            let sinLatitude = Math.sin(lat_rad);
+            const epsilon = 1e-10;
+            sinLatitude = Math.max(-1 + epsilon, Math.min(1 - epsilon, sinLatitude));
+            let y = 0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI);
+            y = y * worldSize;
+            y = Math.max(0, Math.min(worldSize - epsilon, y));
+            x = Math.max(0, Math.min(worldSize - epsilon, x));
+            return { x, y };
+        }
+
+        function worldPixelToLatLon(x, y, zoom) {
+            const n = Math.pow(2, zoom);
+            const worldSize = n * TILE_SIZE;
+            const lon_deg = (x / worldSize * 360.0) - 180.0;
+            const y_normalized = 0.5 - (y / worldSize);
+            const tanhArg = Math.max(-20, Math.min(20, y_normalized * 2 * Math.PI));
+            const lat_rad = Math.asin(Math.tanh(tanhArg));
+            const lat_deg = lat_rad * 180 / Math.PI;
+            return { lat: lat_deg, lon: lon_deg };
+        }
+
+        // --- Performance Optimized Core Logic ---
+        
+        function showLoading(show) {
+            loadingIndicator.style.display = show ? 'block' : 'none';
+        }
+
+        // Get a tile element from the pool or create a new one
+        function getTileElement() {
+            if (tilePool.length > 0) {
+                return tilePool.pop();
+            }
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'tile-wrapper';
+            
+            const tile = document.createElement('img');
+            tile.className = 'tile-image';
+            tile.loading = 'lazy';
+            
+            const coordsLabel = document.createElement('div');
+            coordsLabel.className = 'tile-coords';
+            
+            wrapper.appendChild(tile);
+            wrapper.appendChild(coordsLabel);
+            
+            return wrapper;
+        }
+
+        // Return a tile element to the pool
+        function recycleTileElement(element) {
+            if (tilePool.length < MAX_POOLED_TILES) {
+                // Reset the element
+                const img = element.querySelector('img');
+                img.src = '';
+                img.onload = null;
+                img.onerror = null;
+                
+                tilePool.push(element);
+            } else {
+                // Just remove it if the pool is full
+                element.remove();
+            }
+        }
+
+        function loadVisibleTiles(immediate = false) {
+            if (!config) return;
+            
+            // Debounce tile loading during rapid movements
+            if (!immediate && tileUpdateScheduled) return;
+            
+            tileUpdateScheduled = true;
+            if (!immediate) {
+                requestAnimationFrame(() => {
+                    tileUpdateScheduled = false;
+                    loadVisibleTilesImpl();
+                });
+                return;
+            }
+            
+            tileUpdateScheduled = false;
+            loadVisibleTilesImpl();
+        }
+
+        function loadVisibleTilesImpl() {
+            showLoading(true);
+            tileLoadCounter = 0;
+            tilesAttempted = 0;
+            
+            const tilesToKeep = new Set();
+            
+            // Calculate center world pixel at current zoom
+            const centerWorld = latLonToWorldPixel(centerLat, centerLon, currentZoom);
+            const centerWorldX = centerWorld.x;
+            const centerWorldY = centerWorld.y;
+            
+            // Calculate top-left world pixel visible in viewport
+            const viewWorldMinX = centerWorldX - viewportWidth / 2;
+            const viewWorldMinY = centerWorldY - viewportHeight / 2;
+            
+            // Calculate tile range with buffer
+            const buffer = 1;
+            const minTileX = Math.floor(viewWorldMinX / TILE_SIZE) - buffer;
+            const maxTileX = Math.floor((viewWorldMinX + viewportWidth) / TILE_SIZE) + buffer;
+            const minTileY = Math.floor(viewWorldMinY / TILE_SIZE) - buffer;
+            const maxTileY = Math.floor((viewWorldMinY + viewportHeight) / TILE_SIZE) + buffer;
+            
+            const maxTileIndexAtZoom = Math.pow(2, currentZoom);
+            
+            // Use a document fragment to batch DOM operations
+            const fragment = document.createDocumentFragment();
+            const newTiles = [];
+            
+            for (let x = minTileX; x <= maxTileX; x++) {
+                for (let y = minTileY; y <= maxTileY; y++) {
+                    // Skip tiles outside valid range
+                    if (y < 0 || y >= maxTileIndexAtZoom) continue;
+                    
+                    // Handle horizontal wrapping
+                    const wrappedX = (x % maxTileIndexAtZoom + maxTileIndexAtZoom) % maxTileIndexAtZoom;
+                    
+                    const tileKey = `${currentZoom}_${wrappedX}_${y}`;
+                    tilesToKeep.add(tileKey);
+                    
+                    // Calculate tile's screen position
+                    const tileWorldX = x * TILE_SIZE;
+                    const tileWorldY = y * TILE_SIZE;
+                    const screenX = tileWorldX - viewWorldMinX;
+                    const screenY = tileWorldY - viewWorldMinY;
+                    
+                    if (!activeTiles.has(tileKey)) {
+                        tilesAttempted++;
+                        
+                        // Get a tile element (from pool or create new)
+                        const wrapper = getTileElement();
+                        wrapper.style.transform = `translate(${Math.round(screenX)}px, ${Math.round(screenY)}px)`;
+                        wrapper.style.width = `${TILE_SIZE}px`;
+                        wrapper.style.height = `${TILE_SIZE}px`;
+                        
+                        const tile = wrapper.querySelector('img');
+                        const tileUrl = tilePath
+                            .replace('{z}', currentZoom)
+                            .replace('{x}', wrappedX)
+                            .replace('{y}', y);
+                        tile.src = tileUrl;
+                        
+                        const coordsLabel = wrapper.querySelector('.tile-coords');
+                        coordsLabel.textContent = `${currentZoom}/${wrappedX}/${y}`;
+                        
+                        // Store original tile coordinates for repositioning during drag
+                        wrapper.dataset.tileX = x;
+                        wrapper.dataset.tileY = y;
+                        
+                        fragment.appendChild(wrapper);
+                        newTiles.push({ key: tileKey, element: wrapper });
+                        
+                        const onTileLoadOrError = () => {
+                            tileLoadCounter++;
+                            if (tileLoadCounter >= tilesAttempted) showLoading(false);
+                        };
+                        
+                        tile.onload = onTileLoadOrError;
+                        tile.onerror = () => {
+                            tile.style.backgroundColor = '#f88';
+                            onTileLoadOrError();
+                        };
+                    } else {
+                        // Tile exists, just update its position
+                        const tileInfo = activeTiles.get(tileKey);
+                        tileInfo.element.style.transform = `translate(${Math.round(screenX)}px, ${Math.round(screenY)}px)`;
+                    }
+                }
+            }
+            
+            // Add all new tiles at once
+            if (fragment.childElementCount > 0) {
+                tileContainer.appendChild(fragment);
+                
+                // Register new tiles after they're in the DOM
+                newTiles.forEach(({ key, element }) => {
+                    activeTiles.set(key, { element });
+                });
+            }
+            
+            // Remove tiles no longer needed
+            activeTiles.forEach((tileInfo, key) => {
+                if (!tilesToKeep.has(key)) {
+                    recycleTileElement(tileInfo.element);
+                    activeTiles.delete(key);
+                }
+            });
+            
+            // Hide loading indicator if no new tiles were attempted
+            if (tilesAttempted === 0) showLoading(false);
+            
+            updateDebugInfo();
+        }
+
+        // Completely revised handleZoom function to maintain exact viewport area
+        function handleZoom(zoomIn) {
+            const oldZoom = currentZoom;
+            const newZoom = zoomIn ? currentZoom + 1 : currentZoom - 1;
+            if (newZoom < minZoom || newZoom > maxZoom) return;
+            
+            // The key insight: we don't need to change the center coordinates at all!
+            // Since the map is based on lat/lon coordinates, keeping the same center
+            // but changing the zoom will automatically show the same area at a different detail level.
+            
+            // Just update the zoom level
+            currentZoom = newZoom;
+            
+            // Clear all existing tiles for a clean slate at the new zoom level
+            activeTiles.forEach((tileInfo) => {
+                recycleTileElement(tileInfo.element);
+            });
+            activeTiles.clear();
+            
+            // Load tiles at the new zoom level with the same center coordinates
+            loadVisibleTiles(true);
+            updateZoomButtons();
+            
+            if (DEBUG) {
+                console.log(`Zoom changed to: ${currentZoom}. Center remains at: ${centerLat.toFixed(5)}, ${centerLon.toFixed(5)}`);
+            }
+        }
+
+        function updateZoomButtons() {
+            zoomInButton.disabled = (currentZoom >= maxZoom);
+            zoomOutButton.disabled = (currentZoom <= minZoom);
+        }
+
+        // --- Optimized Event Handlers ---
+        
+        function onMouseDown(event) {
+            if (event.target.tagName === 'IMG') event.preventDefault();
+            isDragging = true;
+            startDragX = event.clientX;
+            startDragY = event.clientY;
+            startDragLat = centerLat;
+            startDragLon = centerLon;
+            dragDeltaX = 0;
+            dragDeltaY = 0;
+            mapContainer.classList.add('dragging');
+            
+            // Use passive listeners for better performance
+            window.addEventListener('mousemove', onMouseMove, { passive: true });
+            window.addEventListener('mouseup', onMouseUp);
+            
+            // Cancel any pending animation frame
+            if (tileUpdateScheduled) {
+                tileUpdateScheduled = false;
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!isDragging) return;
+            
+            // Calculate pixel delta
+            dragDeltaX = event.clientX - startDragX;
+            dragDeltaY = event.clientY - startDragY;
+            
+            // Use transform on the tile container for smooth dragging
+            // This is much more efficient than repositioning each tile
+            tileContainer.style.transform = `translate(${dragDeltaX}px, ${dragDeltaY}px)`;
+            
+            // Update the center coordinates but don't reload tiles yet
+            const startCenterWorld = latLonToWorldPixel(startDragLat, startDragLon, currentZoom);
+            const newCenterWorldX = startCenterWorld.x - dragDeltaX;
+            const newCenterWorldY = startCenterWorld.y - dragDeltaY;
+            const newGeoCenter = worldPixelToLatLon(newCenterWorldX, newCenterWorldY, currentZoom);
+            centerLat = newGeoCenter.lat;
+            centerLon = newGeoCenter.lon;
+            
+            updateDebugInfo();
+        }
+
+        function onMouseUp(event) {
+            if (!isDragging) return;
+            isDragging = false;
+            mapContainer.classList.remove('dragging');
+            
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            
+            // Reset the container transform
+            tileContainer.style.transform = 'none';
+            
+            // Final calculation of center based on total drag
+            const dx = event.clientX - startDragX;
+            const dy = event.clientY - startDragY;
+            
+            if (Math.abs(dx) < 3 && Math.abs(dy) < 3) {
+                // It was just a click, not a drag - no need to reload
+                return;
+            }
+            
+            const startCenterWorld = latLonToWorldPixel(startDragLat, startDragLon, currentZoom);
+            const finalCenterWorldX = startCenterWorld.x - dx;
+            const finalCenterWorldY = startCenterWorld.y - dy;
+            const finalGeoCenter = worldPixelToLatLon(finalCenterWorldX, finalCenterWorldY, currentZoom);
+            centerLat = finalGeoCenter.lat;
+            centerLon = finalGeoCenter.lon;
+            
+            // Reload tiles for the final position
+            loadVisibleTiles(true);
+        }
+
+        function onResize() {
+            viewportWidth = mapContainer.clientWidth;
+            viewportHeight = mapContainer.clientHeight;
+            
+            // Use requestAnimationFrame to avoid multiple resize events
+            if (!tileUpdateScheduled) {
+                tileUpdateScheduled = true;
+                requestAnimationFrame(() => {
+                    tileUpdateScheduled = false;
+                    loadVisibleTiles(true);
+                });
+            }
+        }
+
+        // --- Debug Functions ---
+        
+        function updateDebugInfo() {
+            if (!DEBUG) {
+                debugInfo.style.display = 'none';
+                return;
+            }
+            
+            // Calculate FPS
+            const now = performance.now();
+            frameCount++;
+            
+            if (now - lastFrameTime >= 1000) {
+                fps = Math.round((frameCount * 1000) / (now - lastFrameTime));
+                frameCount = 0;
+                lastFrameTime = now;
+            }
+            
+            debugInfo.style.display = 'block';
+            debugInfo.innerHTML = `
+                Zoom: ${currentZoom}<br>
+                Center: ${centerLat.toFixed(5)}, ${centerLon.toFixed(5)}<br>
+                Active Tiles: ${activeTiles.size}<br>
+                Pooled Tiles: ${tilePool.length}<br>
+                FPS: ${fps}
+            `;
+            
+            // Request next frame update for FPS calculation
+            requestAnimationFrame(updateDebugInfo);
+        }
+
+        // --- Initialization ---
+        
+        function initializeMap() {
+            showLoading(true);
+            
+            fetch(tilesJsonPath)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${tilesJsonPath}`);
+                    return response.json();
+                })
+                .then(jsonConfig => {
+                    config = jsonConfig;
+                    minZoom = config.minzoom ?? 0;
+                    maxZoom = config.maxzoom ?? 15;
+                    centerLat = config.center ? config.center[1] : 0;
+                    centerLon = config.center ? config.center[0] : 0;
+                    currentZoom = config.center ? Math.max(minZoom, Math.min(maxZoom, Math.round(config.center[2]))) : minZoom;
+                    
+                    loadVisibleTiles(true);
+                    updateZoomButtons();
+                    
+                    // Use passive event listeners where possible for better performance
+                    mapContainer.addEventListener('mousedown', onMouseDown);
+                    zoomInButton.addEventListener('click', () => handleZoom(true));
+                    zoomOutButton.addEventListener('click', () => handleZoom(false));
+                    
+                    // Throttle resize events
+                    let resizeTimeout;
+                    window.addEventListener('resize', () => {
+                        clearTimeout(resizeTimeout);
+                        resizeTimeout = setTimeout(onResize, 100);
+                    });
+                    
+                    if (DEBUG) {
+                        lastFrameTime = performance.now();
+                        requestAnimationFrame(updateDebugInfo);
+                    }
+                })
+                .catch(error => {
+                    console.error("Initialization failed:", error);
+                    mapContainer.innerHTML = `<p style="color: red; padding: 20px;">Error loading map configuration: ${error.message}. Check console and ensure '${tilesJsonPath}' is accessible.</p>`;
+                    showLoading(false);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeMap);
+    </script>
+</body>
+</html>
