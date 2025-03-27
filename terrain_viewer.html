@@ -1,484 +1,627 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>True Resolution Tile Viewer v4</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manual Tile Viewer</title>
     <style>
-        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; background-color: #eee; }
-        #map-container { position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab; background-color: #ccc; image-rendering: pixelated; }
-        #map-container.dragging { cursor: grabbing; }
-        #tile-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; -ms-user-select: none; transform-origin: 0 0; will-change: transform; }
-        .tile-wrapper { position: absolute; overflow: hidden; will-change: transform; }
-        .tile-image { display: block; width: 100%; height: 100%; user-select: none; pointer-events: none; background-color: #ddd; image-rendering: pixelated; }
-        .tile-coords { position: absolute; top: 2px; right: 2px; background-color: rgba(0, 0, 0, 0.7); color: white; font-size: 10px; padding: 1px 3px; border-radius: 2px; pointer-events: none; z-index: 1; white-space: nowrap; font-family: monospace; }
-        .custom-zoom { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.65); }
-        .custom-zoom button { display: block; width: 30px; height: 30px; font-size: 18px; font-weight: bold; border: none; background-color: white; cursor: pointer; line-height: 30px; text-align: center; }
-        .custom-zoom button:first-child { border-bottom: 1px solid #ccc; border-radius: 4px 4px 0 0; }
-        .custom-zoom button:last-child { border-radius: 0 0 4px 4px; }
-        .custom-zoom button:hover { background-color: #f4f4f4; }
-        .custom-zoom button:disabled { cursor: default; background-color: #eee; color: #aaa; }
-        #loading-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(255, 255, 255, 0.8); padding: 10px 20px; border-radius: 5px; z-index: 2000; display: none; }
-        #debug-info { position: absolute; bottom: 10px; right: 10px; background-color: rgba(255, 255, 255, 0.8); padding: 5px; border-radius: 3px; font-size: 12px; z-index: 1000; }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* Prevent body scrollbars */
+        font-family: sans-serif;
+        background-color: #eee; /* Background for area outside map */
+      }
+      #map-container {
+        position: relative; /* Context for absolute positioning inside */
+        width: 100%;
+        height: 100%;
+        overflow: hidden; /* Crucial: Clips the tile-grid */
+        cursor: grab; /* Indicate draggable */
+        background-color: #ccc; /* Fallback if tiles don't load */
+      }
+      #map-container.dragging {
+        cursor: grabbing;
+      }
+      #tile-grid {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1px; /* Will be effectively infinite */
+        height: 1px;
+        will-change: transform; /* Hint for performance */
+        user-select: none; /* Prevent text selection during drag */
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        transform: translate3d(0, 0, 0); /* Force GPU acceleration */
+      }
+      .tile-image {
+        position: absolute;
+        width: 256px; /* Standard tile size */
+        height: 256px;
+        user-select: none; /* Prevent image selection */
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        pointer-events: none; /* Prevent image interference with dragging */
+        background-color: #0a1a33; /* Slightly lighter shade of the main color */
+        backface-visibility: hidden; /* Performance boost */
+        border: 0.1px solid rgba(255, 255, 255, 0.8); /* Add white border with transparency */
+        box-sizing: border-box; /* Make sure border is included in the width/height */
+      }
+      .tile-coords {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        color: #f7c1cc;
+        font-size: 12px;
+        font-weight: bold;
+        padding: 1px 3px;
+        border-radius: 2px;
+        pointer-events: none;
+        z-index: 1; /* Above tile image */
+        white-space: nowrap;
+      }
+      /* Custom zoom controls (same as before) */
+      .custom-zoom {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
+      }
+      .custom-zoom button {
+        display: block;
+        width: 30px;
+        height: 30px;
+        font-size: 18px;
+        font-weight: bold;
+        border: none;
+        background-color: white;
+        cursor: pointer;
+        line-height: 30px;
+        text-align: center;
+      }
+      .custom-zoom button:first-child {
+        border-bottom: 1px solid #ccc;
+        border-radius: 4px 4px 0 0;
+      }
+      .custom-zoom button:last-child {
+        border-radius: 0 0 4px 4px;
+      }
+      .custom-zoom button:hover {
+        background-color: #f4f4f4;
+      }
+      .custom-zoom button:disabled {
+        cursor: default;
+        background-color: #eee;
+        color: #aaa;
+      }
+
+      #loading-indicator {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 10px 20px;
+        border-radius: 5px;
+        z-index: 2000;
+        display: none; /* Hidden by default */
+      }
+
+      /* Stats card */
+      #stats-card {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+        z-index: 1000;
+        max-width: 250px;
+        line-height: 1.4;
+      }
+      #stats-card table {
+        margin: 0;
+        border-collapse: collapse;
+      }
+      #stats-card td {
+        padding: 2px 5px;
+      }
+      #stats-card td:first-child {
+        font-weight: bold;
+        padding-right: 10px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div id="map-container">
-        <div id="tile-container"></div>
+      <div id="tile-grid"></div>
     </div>
+
     <div class="custom-zoom">
-        <button id="zoom-in" title="Increase detail">+</button>
-        <button id="zoom-out" title="Decrease detail">-</button>
+      <button id="zoom-in" title="Zoom in">+</button>
+      <button id="zoom-out" title="Zoom out">-</button>
     </div>
+
     <div id="loading-indicator">Loading...</div>
-    <div id="debug-info"></div>
+
+    <div id="stats-card">
+      <table>
+        <tr>
+          <td>FPS:</td>
+          <td id="fps-value">0</td>
+        </tr>
+        <tr>
+          <td>Center:</td>
+          <td id="center-value">0.000, 0.000</td>
+        </tr>
+        <tr>
+          <td>Zoom:</td>
+          <td id="zoom-value">0</td>
+        </tr>
+        <tr>
+          <td>Tiles:</td>
+          <td id="tiles-value">0</td>
+        </tr>
+        <tr>
+          <td>Memory:</td>
+          <td id="memory-value">0 MB</td>
+        </tr>
+      </table>
+    </div>
 
     <script>
-        // --- Configuration ---
-        const tilesJsonPath = './terrain_tiles/tiles.json';
-        const tilePath = './terrain_tiles/{z}/{x}/{y}.png';
-        const TILE_SIZE = 256;
-        const DEBUG = true; // Set to true to show debug info
+      // --- Configuration ---
+      const tilesJsonPath = "./terrain_tiles/tiles.json"; // Adjust if needed
+      const tilePath = "./terrain_tiles/{z}/{x}/{y}.png"; // Adjust if needed
+      const TILE_SIZE = 256; // Pixel dimensions of a tile
+      const TILE_BUFFER = 1; // Buffer of tiles to load around viewport
+      const TILE_MEMORY_ESTIMATE = 0.25; // Estimated MB per tile
 
-        // --- DOM Elements ---
-        const mapContainer = document.getElementById('map-container');
-        const tileContainer = document.getElementById('tile-container');
-        const zoomInButton = document.getElementById('zoom-in');
-        const zoomOutButton = document.getElementById('zoom-out');
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const debugInfo = document.getElementById('debug-info');
+      // --- DOM Elements ---
+      const mapContainer = document.getElementById("map-container");
+      const tileGrid = document.getElementById("tile-grid");
+      const zoomInButton = document.getElementById("zoom-in");
+      const zoomOutButton = document.getElementById("zoom-out");
+      const loadingIndicator = document.getElementById("loading-indicator");
 
-        // --- State Variables ---
-        let config = null;
-        let currentZoom = 10;
-        let minZoom = 0;
-        let maxZoom = 15;
-        let centerLat = 0;
-        let centerLon = 0;
-        let viewportWidth = mapContainer.clientWidth;
-        let viewportHeight = mapContainer.clientHeight;
-        let isDragging = false;
-        let startDragX = 0, startDragY = 0;
-        let startDragLat = 0, startDragLon = 0;
-        let tileLoadCounter = 0;
-        let tilesAttempted = 0;
-        let lastFrameTime = 0;
-        let frameCount = 0;
-        let fps = 0;
-        let tileUpdateScheduled = false;
-        let dragDeltaX = 0, dragDeltaY = 0;
-        
-        // Use a Map for better performance with large numbers of tiles
-        const activeTiles = new Map();
-        
-        // Create a tile pool for reusing DOM elements
-        const tilePool = [];
-        const MAX_POOLED_TILES = 50;
+      // Stats elements
+      const fpsValue = document.getElementById("fps-value");
+      const centerValue = document.getElementById("center-value");
+      const zoomValue = document.getElementById("zoom-value");
+      const tilesValue = document.getElementById("tiles-value");
+      const memoryValue = document.getElementById("memory-value");
 
-        // --- Utility Functions ---
-        function latLonToWorldPixel(lat_deg, lon_deg, zoom) {
-            const lat_rad = lat_deg * Math.PI / 180;
-            const n = Math.pow(2, zoom);
-            const worldSize = n * TILE_SIZE;
-            let x = (lon_deg + 180.0) / 360.0 * worldSize;
-            let sinLatitude = Math.sin(lat_rad);
-            const epsilon = 1e-10;
-            sinLatitude = Math.max(-1 + epsilon, Math.min(1 - epsilon, sinLatitude));
-            let y = 0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI);
-            y = y * worldSize;
-            y = Math.max(0, Math.min(worldSize - epsilon, y));
-            x = Math.max(0, Math.min(worldSize - epsilon, x));
-            return { x, y };
-        }
+      // --- State Variables ---
+      let config = null; // To store loaded tiles.json data
+      let currentZoom = 10; // Initial default zoom
+      let minZoom = 0;
+      let maxZoom = 15;
+      // Offset of the tile grid's top-left corner relative to the container's top-left
+      let gridOffsetX = 0;
+      let gridOffsetY = 0;
+      let viewportWidth = mapContainer.clientWidth;
+      let viewportHeight = mapContainer.clientHeight;
+      let isDragging = false;
+      let startDragX = 0;
+      let startDragY = 0;
+      let startGridX = 0;
+      let startGridY = 0;
+      let tileLoadCounter = 0; // To track async tile loading
+      let visibleTiles = 0; // Number of tiles currently visible
+      let lastFrameTime = 0; // For FPS calculation
+      let frameCount = 0; // For FPS calculation
+      let fps = 0; // Current FPS
+      let tileCache = new Map(); // Cache for tile elements
+      let loadVisibleTilesDebounced = null; // For debouncing tile loading
+      let animationFrameId = null; // For animation frame
 
-        function worldPixelToLatLon(x, y, zoom) {
-            const n = Math.pow(2, zoom);
-            const worldSize = n * TILE_SIZE;
-            const lon_deg = (x / worldSize * 360.0) - 180.0;
-            const y_normalized = 0.5 - (y / worldSize);
-            const tanhArg = Math.max(-20, Math.min(20, y_normalized * 2 * Math.PI));
-            const lat_rad = Math.asin(Math.tanh(tanhArg));
-            const lat_deg = lat_rad * 180 / Math.PI;
-            return { lat: lat_deg, lon: lon_deg };
-        }
+      // --- Utility Functions ---
 
-        // --- Performance Optimized Core Logic ---
-        
-        function showLoading(show) {
-            loadingIndicator.style.display = show ? 'block' : 'none';
-        }
+      // Convert lat/lon to tile coordinates (from your utils)
+      function deg2num(lat_deg, lon_deg, zoom) {
+        const lat_rad = (lat_deg * Math.PI) / 180;
+        const n = Math.pow(2, zoom);
+        const xtile = Math.floor(((lon_deg + 180.0) / 360.0) * n);
+        const ytile = Math.floor(
+          ((1.0 - Math.asinh(Math.tan(lat_rad)) / Math.PI) / 2.0) * n
+        );
+        return { x: xtile, y: ytile };
+      }
 
-        // Get a tile element from the pool or create a new one
-        function getTileElement() {
-            if (tilePool.length > 0) {
-                return tilePool.pop();
+      // Convert tile coordinates to lat/lon
+      function num2deg(xtile, ytile, zoom) {
+        const n = Math.pow(2, zoom);
+        const lon_deg = (xtile / n) * 360.0 - 180.0;
+        const lat_rad = Math.atan(Math.sinh(Math.PI * (1 - (2 * ytile) / n)));
+        const lat_deg = (lat_rad * 180.0) / Math.PI;
+        return { lat: lat_deg, lon: lon_deg };
+      }
+
+      // Debounce function to limit how often a function is called
+      function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+      }
+
+      // --- Core Logic ---
+
+      function updateGridTransform() {
+        // Use translate3d for hardware acceleration
+        tileGrid.style.transform = `translate3d(${gridOffsetX}px, ${gridOffsetY}px, 0)`;
+
+        // Update center coordinates in stats
+        updateCenterCoordinates();
+      }
+
+      function updateCenterCoordinates() {
+        // Calculate the center point in tile coordinates
+        const centerGridX = -gridOffsetX + viewportWidth / 2;
+        const centerGridY = -gridOffsetY + viewportHeight / 2;
+
+        // Convert to tile indices
+        const tileX = centerGridX / TILE_SIZE;
+        const tileY = centerGridY / TILE_SIZE;
+
+        // Convert to geographic coordinates
+        const geoCoords = num2deg(tileX, tileY, currentZoom);
+
+        // Update the display
+        centerValue.textContent = `${geoCoords.lat.toFixed(
+          5
+        )}, ${geoCoords.lon.toFixed(5)}`;
+        zoomValue.textContent = currentZoom;
+      }
+
+      function showLoading(show) {
+        loadingIndicator.style.display = show ? "block" : "none";
+      }
+
+      function loadVisibleTiles() {
+        if (!config) return; // Need config first
+        showLoading(true);
+        tileLoadCounter = 0; // Reset counter
+
+        // Calculate the pixel bounds of the visible area in the grid's coordinate system
+        const viewMinX = -gridOffsetX;
+        const viewMinY = -gridOffsetY;
+        const viewMaxX = viewMinX + viewportWidth;
+        const viewMaxY = viewMinY + viewportHeight;
+
+        // Calculate the range of tile indices needed
+        // Add a buffer of tiles around the viewport for smoother panning
+        const minTileX = Math.floor(viewMinX / TILE_SIZE) - TILE_BUFFER;
+        const maxTileX = Math.ceil(viewMaxX / TILE_SIZE) + TILE_BUFFER;
+        const minTileY = Math.floor(viewMinY / TILE_SIZE) - TILE_BUFFER;
+        const maxTileY = Math.ceil(viewMaxY / TILE_SIZE) + TILE_BUFFER;
+
+        const maxTileIndexAtZoom = Math.pow(2, currentZoom);
+        let tilesToLoad = 0;
+        let newTiles = new Set(); // Track tiles we're about to create
+
+        // First pass: identify tiles we need
+        for (let x = minTileX; x <= maxTileX; x++) {
+          for (let y = minTileY; y <= maxTileY; y++) {
+            // Wrap tile indices if necessary
+            const wrappedX =
+              ((x % maxTileIndexAtZoom) + maxTileIndexAtZoom) %
+              maxTileIndexAtZoom;
+            // Clamp Y coordinate
+            if (y < 0 || y >= maxTileIndexAtZoom) {
+              continue;
             }
-            
-            const wrapper = document.createElement('div');
-            wrapper.className = 'tile-wrapper';
-            
-            const tile = document.createElement('img');
-            tile.className = 'tile-image';
-            tile.loading = 'lazy';
-            
-            const coordsLabel = document.createElement('div');
-            coordsLabel.className = 'tile-coords';
-            
-            wrapper.appendChild(tile);
-            wrapper.appendChild(coordsLabel);
-            
-            return wrapper;
+
+            const tileKey = `${currentZoom}/${wrappedX}/${y}`;
+            newTiles.add(tileKey);
+
+            // Skip if this tile is already in the DOM
+            if (tileCache.has(tileKey)) {
+              continue;
+            }
+
+            tilesToLoad++;
+            const tileUrl = tilePath
+              .replace("{z}", currentZoom)
+              .replace("{x}", wrappedX)
+              .replace("{y}", y);
+
+            const tile = document.createElement("img");
+            tile.className = "tile-image";
+            tile.src = tileUrl;
+            tile.style.left = `${x * TILE_SIZE}px`; // Use original x for positioning
+            tile.style.top = `${y * TILE_SIZE}px`;
+            tile.dataset.z = currentZoom;
+            tile.dataset.x = wrappedX; // Store wrapped coords
+            tile.dataset.y = y;
+            tile.loading = "lazy"; // Basic browser optimization
+            tile.decoding = "async"; // Use async decoding for better performance
+
+            // Add coordinate label
+            const coordsLabel = document.createElement("div");
+            coordsLabel.className = "tile-coords";
+            coordsLabel.textContent = tileKey;
+            coordsLabel.style.left = `${x * TILE_SIZE}px`; // Position label with tile
+            coordsLabel.style.top = `${y * TILE_SIZE}px`;
+
+            // Handle tile loading completion/error
+            const onTileLoadOrError = () => {
+              tileLoadCounter++;
+              if (tileLoadCounter >= tilesToLoad) {
+                showLoading(false);
+              }
+            };
+            tile.onload = onTileLoadOrError;
+            tile.onerror = () => {
+              tile.style.backgroundColor = "#080929"; // Indicate error visually
+              console.warn(`Failed to load tile: ${tileUrl}`);
+              onTileLoadOrError(); // Still count it as "processed"
+            };
+
+            tileGrid.appendChild(tile);
+            tileGrid.appendChild(coordsLabel);
+
+            // Store in cache
+            tileCache.set(tileKey, { tile, label: coordsLabel });
+          }
         }
 
-        // Return a tile element to the pool
-        function recycleTileElement(element) {
-            if (tilePool.length < MAX_POOLED_TILES) {
-                // Reset the element
-                const img = element.querySelector('img');
-                img.src = '';
-                img.onload = null;
-                img.onerror = null;
-                
-                tilePool.push(element);
-            } else {
-                // Just remove it if the pool is full
-                element.remove();
-            }
+        // Second pass: remove tiles that are no longer visible
+        for (const [tileKey, elements] of tileCache.entries()) {
+          if (!newTiles.has(tileKey)) {
+            // Remove from DOM and cache
+            tileGrid.removeChild(elements.tile);
+            tileGrid.removeChild(elements.label);
+            tileCache.delete(tileKey);
+          }
         }
 
-        function loadVisibleTiles(immediate = false) {
-            if (!config) return;
-            
-            // Debounce tile loading during rapid movements
-            if (!immediate && tileUpdateScheduled) return;
-            
-            tileUpdateScheduled = true;
-            if (!immediate) {
-                requestAnimationFrame(() => {
-                    tileUpdateScheduled = false;
-                    loadVisibleTilesImpl();
-                });
-                return;
-            }
-            
-            tileUpdateScheduled = false;
-            loadVisibleTilesImpl();
+        // Update stats
+        visibleTiles = tileCache.size;
+        tilesValue.textContent = visibleTiles;
+        memoryValue.textContent = `~${Math.round(
+          visibleTiles * TILE_MEMORY_ESTIMATE
+        )} MB`;
+
+        if (tilesToLoad === 0) {
+          showLoading(false); // Hide if no tiles were even attempted
+        }
+      }
+
+      function handleZoom(zoomIn) {
+        const newZoom = zoomIn ? currentZoom + 1 : currentZoom - 1;
+
+        if (newZoom < minZoom || newZoom > maxZoom) {
+          return; // Zoom level out of bounds
         }
 
-        function loadVisibleTilesImpl() {
-            showLoading(true);
-            tileLoadCounter = 0;
-            tilesAttempted = 0;
-            
-            const tilesToKeep = new Set();
-            
-            // Calculate center world pixel at current zoom
-            const centerWorld = latLonToWorldPixel(centerLat, centerLon, currentZoom);
-            const centerWorldX = centerWorld.x;
-            const centerWorldY = centerWorld.y;
-            
-            // Calculate top-left world pixel visible in viewport
-            const viewWorldMinX = centerWorldX - viewportWidth / 2;
-            const viewWorldMinY = centerWorldY - viewportHeight / 2;
-            
-            // Calculate tile range with buffer
-            const buffer = 1;
-            const minTileX = Math.floor(viewWorldMinX / TILE_SIZE) - buffer;
-            const maxTileX = Math.floor((viewWorldMinX + viewportWidth) / TILE_SIZE) + buffer;
-            const minTileY = Math.floor(viewWorldMinY / TILE_SIZE) - buffer;
-            const maxTileY = Math.floor((viewWorldMinY + viewportHeight) / TILE_SIZE) + buffer;
-            
-            const maxTileIndexAtZoom = Math.pow(2, currentZoom);
-            
-            // Use a document fragment to batch DOM operations
-            const fragment = document.createDocumentFragment();
-            const newTiles = [];
-            
-            for (let x = minTileX; x <= maxTileX; x++) {
-                for (let y = minTileY; y <= maxTileY; y++) {
-                    // Skip tiles outside valid range
-                    if (y < 0 || y >= maxTileIndexAtZoom) continue;
-                    
-                    // Handle horizontal wrapping
-                    const wrappedX = (x % maxTileIndexAtZoom + maxTileIndexAtZoom) % maxTileIndexAtZoom;
-                    
-                    const tileKey = `${currentZoom}_${wrappedX}_${y}`;
-                    tilesToKeep.add(tileKey);
-                    
-                    // Calculate tile's screen position
-                    const tileWorldX = x * TILE_SIZE;
-                    const tileWorldY = y * TILE_SIZE;
-                    const screenX = tileWorldX - viewWorldMinX;
-                    const screenY = tileWorldY - viewWorldMinY;
-                    
-                    if (!activeTiles.has(tileKey)) {
-                        tilesAttempted++;
-                        
-                        // Get a tile element (from pool or create new)
-                        const wrapper = getTileElement();
-                        wrapper.style.transform = `translate(${Math.round(screenX)}px, ${Math.round(screenY)}px)`;
-                        wrapper.style.width = `${TILE_SIZE}px`;
-                        wrapper.style.height = `${TILE_SIZE}px`;
-                        
-                        const tile = wrapper.querySelector('img');
-                        const tileUrl = tilePath
-                            .replace('{z}', currentZoom)
-                            .replace('{x}', wrappedX)
-                            .replace('{y}', y);
-                        tile.src = tileUrl;
-                        
-                        const coordsLabel = wrapper.querySelector('.tile-coords');
-                        coordsLabel.textContent = `${currentZoom}/${wrappedX}/${y}`;
-                        
-                        // Store original tile coordinates for repositioning during drag
-                        wrapper.dataset.tileX = x;
-                        wrapper.dataset.tileY = y;
-                        
-                        fragment.appendChild(wrapper);
-                        newTiles.push({ key: tileKey, element: wrapper });
-                        
-                        const onTileLoadOrError = () => {
-                            tileLoadCounter++;
-                            if (tileLoadCounter >= tilesAttempted) showLoading(false);
-                        };
-                        
-                        tile.onload = onTileLoadOrError;
-                        tile.onerror = () => {
-                            tile.style.backgroundColor = '#f88';
-                            onTileLoadOrError();
-                        };
-                    } else {
-                        // Tile exists, just update its position
-                        const tileInfo = activeTiles.get(tileKey);
-                        tileInfo.element.style.transform = `translate(${Math.round(screenX)}px, ${Math.round(screenY)}px)`;
-                    }
-                }
-            }
-            
-            // Add all new tiles at once
-            if (fragment.childElementCount > 0) {
-                tileContainer.appendChild(fragment);
-                
-                // Register new tiles after they're in the DOM
-                newTiles.forEach(({ key, element }) => {
-                    activeTiles.set(key, { element });
-                });
-            }
-            
-            // Remove tiles no longer needed
-            activeTiles.forEach((tileInfo, key) => {
-                if (!tilesToKeep.has(key)) {
-                    recycleTileElement(tileInfo.element);
-                    activeTiles.delete(key);
-                }
-            });
-            
-            // Hide loading indicator if no new tiles were attempted
-            if (tilesAttempted === 0) showLoading(false);
-            
-            updateDebugInfo();
+        // 1. Calculate the pixel coordinates of the viewport center relative to the current grid
+        const centerGridX = -gridOffsetX + viewportWidth / 2;
+        const centerGridY = -gridOffsetY + viewportHeight / 2;
+
+        // 2. Calculate the scaling factor between zoom levels
+        const scaleFactor = Math.pow(2, newZoom - currentZoom);
+
+        // 3. Calculate the equivalent pixel coordinates in the new zoom level's grid
+        const newCenterGridX = centerGridX * scaleFactor;
+        const newCenterGridY = centerGridY * scaleFactor;
+
+        // 4. Calculate the new grid offset to keep the new center point aligned with the viewport center
+        gridOffsetX = viewportWidth / 2 - newCenterGridX;
+        gridOffsetY = viewportHeight / 2 - newCenterGridY;
+
+        // 5. Update state and reload
+        currentZoom = newZoom;
+
+        // Clear tile cache when zoom changes
+        tileCache.clear();
+        tileGrid.innerHTML = "";
+
+        updateGridTransform();
+        loadVisibleTiles();
+        updateZoomButtons();
+      }
+
+      function updateZoomButtons() {
+        zoomInButton.disabled = currentZoom >= maxZoom;
+        zoomOutButton.disabled = currentZoom <= minZoom;
+      }
+
+      function updateFPS(timestamp) {
+        if (!lastFrameTime) {
+          lastFrameTime = timestamp;
+          frameCount = 0;
         }
 
-        // Completely revised handleZoom function to maintain exact viewport area
-        function handleZoom(zoomIn) {
-            const oldZoom = currentZoom;
-            const newZoom = zoomIn ? currentZoom + 1 : currentZoom - 1;
-            if (newZoom < minZoom || newZoom > maxZoom) return;
-            
-            // The key insight: we don't need to change the center coordinates at all!
-            // Since the map is based on lat/lon coordinates, keeping the same center
-            // but changing the zoom will automatically show the same area at a different detail level.
-            
-            // Just update the zoom level
-            currentZoom = newZoom;
-            
-            // Clear all existing tiles for a clean slate at the new zoom level
-            activeTiles.forEach((tileInfo) => {
-                recycleTileElement(tileInfo.element);
-            });
-            activeTiles.clear();
-            
-            // Load tiles at the new zoom level with the same center coordinates
-            loadVisibleTiles(true);
+        frameCount++;
+
+        // Update FPS every second
+        if (timestamp - lastFrameTime >= 1000) {
+          fps = Math.round((frameCount * 1000) / (timestamp - lastFrameTime));
+          fpsValue.textContent = fps;
+          frameCount = 0;
+          lastFrameTime = timestamp;
+        }
+
+        animationFrameId = requestAnimationFrame(updateFPS);
+      }
+
+      // --- Event Handlers ---
+
+      function onMouseDown(event) {
+        // Prevent default image dragging behavior
+        if (event.target.tagName === "IMG") {
+          event.preventDefault();
+        }
+        isDragging = true;
+        startDragX = event.clientX;
+        startDragY = event.clientY;
+        startGridX = gridOffsetX;
+        startGridY = gridOffsetY;
+        mapContainer.classList.add("dragging");
+        // Add listeners to the window to catch mouse movements/mouseup outside the container
+        window.addEventListener("mousemove", onMouseMove, { passive: true });
+        window.addEventListener("mouseup", onMouseUp);
+      }
+
+      function onMouseMove(event) {
+        if (!isDragging) return;
+        const dx = event.clientX - startDragX;
+        const dy = event.clientY - startDragY;
+        gridOffsetX = startGridX + dx;
+        gridOffsetY = startGridY + dy;
+        updateGridTransform();
+        // Use debounced version for better performance during drag
+        loadVisibleTilesDebounced();
+      }
+
+      function onMouseUp(event) {
+        if (!isDragging) return;
+        isDragging = false;
+        mapContainer.classList.remove("dragging");
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+        // Reload tiles now that dragging stopped
+        loadVisibleTiles();
+      }
+
+      function onResize() {
+        viewportWidth = mapContainer.clientWidth;
+        viewportHeight = mapContainer.clientHeight;
+        loadVisibleTiles();
+      }
+
+      // Touch event handlers for mobile support
+      function onTouchStart(event) {
+        if (event.touches.length !== 1) return;
+        event.preventDefault();
+        isDragging = true;
+        startDragX = event.touches[0].clientX;
+        startDragY = event.touches[0].clientY;
+        startGridX = gridOffsetX;
+        startGridY = gridOffsetY;
+        mapContainer.classList.add("dragging");
+      }
+
+      function onTouchMove(event) {
+        if (!isDragging || event.touches.length !== 1) return;
+        const dx = event.touches[0].clientX - startDragX;
+        const dy = event.touches[0].clientY - startDragY;
+        gridOffsetX = startGridX + dx;
+        gridOffsetY = startGridY + dy;
+        updateGridTransform();
+        loadVisibleTilesDebounced();
+      }
+
+      function onTouchEnd(event) {
+        if (!isDragging) return;
+        isDragging = false;
+        mapContainer.classList.remove("dragging");
+        loadVisibleTiles();
+      }
+
+      // --- Initialization ---
+      function initializeMap() {
+        showLoading(true);
+
+        // Create debounced version of loadVisibleTiles
+        loadVisibleTilesDebounced = debounce(loadVisibleTiles, 100);
+
+        // Start FPS counter
+        animationFrameId = requestAnimationFrame(updateFPS);
+
+        fetch(tilesJsonPath)
+          .then((response) => {
+            if (!response.ok)
+              throw new Error(
+                `HTTP ${response.status} fetching ${tilesJsonPath}`
+              );
+            return response.json();
+          })
+          .then((jsonConfig) => {
+            config = jsonConfig;
+            minZoom = config.minzoom ?? 0;
+            maxZoom = config.maxzoom ?? 15;
+            currentZoom = config.center
+              ? Math.max(
+                  minZoom,
+                  Math.min(maxZoom, Math.round(config.center[2]))
+                )
+              : minZoom;
+
+            // Calculate initial center tile and pixel offset
+            const centerLon = config.center ? config.center[0] : 0;
+            const centerLat = config.center ? config.center[1] : 0;
+            const centerTile = deg2num(centerLat, centerLon, currentZoom);
+
+            // Calculate offset to place the *center* of the center tile at the viewport center
+            gridOffsetX =
+              viewportWidth / 2 - centerTile.x * TILE_SIZE - TILE_SIZE / 2;
+            gridOffsetY =
+              viewportHeight / 2 - centerTile.y * TILE_SIZE - TILE_SIZE / 2;
+
+            console.log(
+              `Initial Zoom: ${currentZoom}, Center Tile: ${centerTile.x},${
+                centerTile.y
+              }, Offset: ${gridOffsetX.toFixed(1)},${gridOffsetY.toFixed(1)}`
+            );
+
+            updateGridTransform();
+            loadVisibleTiles();
             updateZoomButtons();
-            
-            if (DEBUG) {
-                console.log(`Zoom changed to: ${currentZoom}. Center remains at: ${centerLat.toFixed(5)}, ${centerLon.toFixed(5)}`);
-            }
-        }
 
-        function updateZoomButtons() {
-            zoomInButton.disabled = (currentZoom >= maxZoom);
-            zoomOutButton.disabled = (currentZoom <= minZoom);
-        }
+            // Setup event listeners
+            mapContainer.addEventListener("mousedown", onMouseDown);
+            mapContainer.addEventListener("touchstart", onTouchStart, {
+              passive: false,
+            });
+            mapContainer.addEventListener("touchmove", onTouchMove, {
+              passive: true,
+            });
+            mapContainer.addEventListener("touchend", onTouchEnd);
+            zoomInButton.addEventListener("click", () => handleZoom(true));
+            zoomOutButton.addEventListener("click", () => handleZoom(false));
 
-        // --- Optimized Event Handlers ---
-        
-        function onMouseDown(event) {
-            if (event.target.tagName === 'IMG') event.preventDefault();
-            isDragging = true;
-            startDragX = event.clientX;
-            startDragY = event.clientY;
-            startDragLat = centerLat;
-            startDragLon = centerLon;
-            dragDeltaX = 0;
-            dragDeltaY = 0;
-            mapContainer.classList.add('dragging');
-            
-            // Use passive listeners for better performance
-            window.addEventListener('mousemove', onMouseMove, { passive: true });
-            window.addEventListener('mouseup', onMouseUp);
-            
-            // Cancel any pending animation frame
-            if (tileUpdateScheduled) {
-                tileUpdateScheduled = false;
-            }
-        }
+            // Use passive event listener for better scroll performance
+            window.addEventListener("resize", onResize, { passive: true });
 
-        function onMouseMove(event) {
-            if (!isDragging) return;
-            
-            // Calculate pixel delta
-            dragDeltaX = event.clientX - startDragX;
-            dragDeltaY = event.clientY - startDragY;
-            
-            // Use transform on the tile container for smooth dragging
-            // This is much more efficient than repositioning each tile
-            tileContainer.style.transform = `translate(${dragDeltaX}px, ${dragDeltaY}px)`;
-            
-            // Update the center coordinates but don't reload tiles yet
-            const startCenterWorld = latLonToWorldPixel(startDragLat, startDragLon, currentZoom);
-            const newCenterWorldX = startCenterWorld.x - dragDeltaX;
-            const newCenterWorldY = startCenterWorld.y - dragDeltaY;
-            const newGeoCenter = worldPixelToLatLon(newCenterWorldX, newCenterWorldY, currentZoom);
-            centerLat = newGeoCenter.lat;
-            centerLon = newGeoCenter.lon;
-            
-            updateDebugInfo();
-        }
+            // Add wheel zoom support
+            mapContainer.addEventListener(
+              "wheel",
+              (e) => {
+                e.preventDefault();
+                handleZoom(e.deltaY < 0);
+              },
+              { passive: false }
+            );
+          })
+          .catch((error) => {
+            console.error("Initialization failed:", error);
+            mapContainer.innerHTML = `<p style="color: red; padding: 20px;">Error loading map configuration: ${error.message}. Check console and ensure '${tilesJsonPath}' is accessible.</p>`;
+            showLoading(false);
+          });
+      }
 
-        function onMouseUp(event) {
-            if (!isDragging) return;
-            isDragging = false;
-            mapContainer.classList.remove('dragging');
-            
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-            
-            // Reset the container transform
-            tileContainer.style.transform = 'none';
-            
-            // Final calculation of center based on total drag
-            const dx = event.clientX - startDragX;
-            const dy = event.clientY - startDragY;
-            
-            if (Math.abs(dx) < 3 && Math.abs(dy) < 3) {
-                // It was just a click, not a drag - no need to reload
-                return;
-            }
-            
-            const startCenterWorld = latLonToWorldPixel(startDragLat, startDragLon, currentZoom);
-            const finalCenterWorldX = startCenterWorld.x - dx;
-            const finalCenterWorldY = startCenterWorld.y - dy;
-            const finalGeoCenter = worldPixelToLatLon(finalCenterWorldX, finalCenterWorldY, currentZoom);
-            centerLat = finalGeoCenter.lat;
-            centerLon = finalGeoCenter.lon;
-            
-            // Reload tiles for the final position
-            loadVisibleTiles(true);
-        }
+      // Start initialization when the DOM is ready
+      document.addEventListener("DOMContentLoaded", initializeMap);
 
-        function onResize() {
-            viewportWidth = mapContainer.clientWidth;
-            viewportHeight = mapContainer.clientHeight;
-            
-            // Use requestAnimationFrame to avoid multiple resize events
-            if (!tileUpdateScheduled) {
-                tileUpdateScheduled = true;
-                requestAnimationFrame(() => {
-                    tileUpdateScheduled = false;
-                    loadVisibleTiles(true);
-                });
-            }
+      // Clean up on page unload
+      window.addEventListener("beforeunload", () => {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
         }
-
-        // --- Debug Functions ---
-        
-        function updateDebugInfo() {
-            if (!DEBUG) {
-                debugInfo.style.display = 'none';
-                return;
-            }
-            
-            // Calculate FPS
-            const now = performance.now();
-            frameCount++;
-            
-            if (now - lastFrameTime >= 1000) {
-                fps = Math.round((frameCount * 1000) / (now - lastFrameTime));
-                frameCount = 0;
-                lastFrameTime = now;
-            }
-            
-            debugInfo.style.display = 'block';
-            debugInfo.innerHTML = `
-                Zoom: ${currentZoom}<br>
-                Center: ${centerLat.toFixed(5)}, ${centerLon.toFixed(5)}<br>
-                Active Tiles: ${activeTiles.size}<br>
-                Pooled Tiles: ${tilePool.length}<br>
-                FPS: ${fps}
-            `;
-            
-            // Request next frame update for FPS calculation
-            requestAnimationFrame(updateDebugInfo);
-        }
-
-        // --- Initialization ---
-        
-        function initializeMap() {
-            showLoading(true);
-            
-            fetch(tilesJsonPath)
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${tilesJsonPath}`);
-                    return response.json();
-                })
-                .then(jsonConfig => {
-                    config = jsonConfig;
-                    minZoom = config.minzoom ?? 0;
-                    maxZoom = config.maxzoom ?? 15;
-                    centerLat = config.center ? config.center[1] : 0;
-                    centerLon = config.center ? config.center[0] : 0;
-                    currentZoom = config.center ? Math.max(minZoom, Math.min(maxZoom, Math.round(config.center[2]))) : minZoom;
-                    
-                    loadVisibleTiles(true);
-                    updateZoomButtons();
-                    
-                    // Use passive event listeners where possible for better performance
-                    mapContainer.addEventListener('mousedown', onMouseDown);
-                    zoomInButton.addEventListener('click', () => handleZoom(true));
-                    zoomOutButton.addEventListener('click', () => handleZoom(false));
-                    
-                    // Throttle resize events
-                    let resizeTimeout;
-                    window.addEventListener('resize', () => {
-                        clearTimeout(resizeTimeout);
-                        resizeTimeout = setTimeout(onResize, 100);
-                    });
-                    
-                    if (DEBUG) {
-                        lastFrameTime = performance.now();
-                        requestAnimationFrame(updateDebugInfo);
-                    }
-                })
-                .catch(error => {
-                    console.error("Initialization failed:", error);
-                    mapContainer.innerHTML = `<p style="color: red; padding: 20px;">Error loading map configuration: ${error.message}. Check console and ensure '${tilesJsonPath}' is accessible.</p>`;
-                    showLoading(false);
-                });
-        }
-
-        document.addEventListener('DOMContentLoaded', initializeMap);
+        tileCache.clear();
+      });
     </script>
-</body>
+  </body>
 </html>
