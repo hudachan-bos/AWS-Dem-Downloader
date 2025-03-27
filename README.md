@@ -1,7 +1,9 @@
 
 # 🚀 AWS Terrarium DEM Tile Downloader 🌍
 
-![Terrarium Tiles](public/terrarium.jpeg)
+<p align="center">
+  <img src="public/terrarium.jpeg" />
+</p>
 
 **Fetch high-resolution terrain elevation data directly from AWS with blazing speed!** ⚡️
 
