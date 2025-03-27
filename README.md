@@ -1,4 +1,3 @@
-
 # 🚀 AWS Terrarium DEM Tile Downloader 🌍
 
 <p align="center">
@@ -149,12 +148,51 @@ After downloading, you'll find a `tiles.json` file in your output directory (e.g
 *   📜 Data attribution
 *   🔢 Encoding type (`terrarium`)
 
+## Terrain Viewer HTML 🖥️
+
+Included in this project is a high-performance terrain tile viewer (`terrain_viewer.html`) that allows you to visualize your downloaded tiles directly in a web browser. This viewer is optimized for smooth interaction with large tile sets.
+
+### Features:
+
+* **High-Performance Rendering:** Optimized for smooth panning even with many tiles
+* **Detail Level Control:** Change detail levels without changing the visible area
+* **Tile Coordinates Display:** Shows the z/x/y coordinates of each tile
+* **Responsive Design:** Adapts to any screen size
+* **Memory Efficient:** Uses tile pooling to minimize memory usage
+
+### How to Use:
+
+1. **Open the Viewer:**
+   ```bash
+   # Using Python's built-in HTTP server (from project root)
+   python -m http.server 8000
+   ```
+   Then visit `http://localhost:8000/terrain_viewer.html` in your browser.
+
+2. **Navigation:**
+   * **Pan:** Click and drag to move around
+   * **Change Detail:** Use the + and - buttons to increase or decrease detail level
+   
+3. **Customization:**
+   You can modify the viewer by editing `terrain_viewer.html`. Key parameters at the top of the script include:
+   ```javascript
+   const tilesJsonPath = './terrain_tiles/tiles.json';
+   const tilePath = './terrain_tiles/{z}/{x}/{y}.png';
+   const TILE_SIZE = 256;
+   const DEBUG = false; // Set to true for performance metrics
+   ```
+
+The viewer automatically loads the configuration from your `tiles.json` file, so it will center on your downloaded area.
+
+---
+
 ## File Structure Layout 📂
 
 ```
 AWS-Dem-Downloader/
 ├── terrain_cli.py        # The main script you run
 ├── terrain_utils.py      # The core logic engine
+├── terrain_viewer.html   # Web-based viewer for your tiles
 ├── requirements.txt      # Dependencies list
 ├── terrain_tiles/        # Default output folder
 │   ├── 0/                # Zoom level folders...
