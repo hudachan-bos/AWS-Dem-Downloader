@@ -1,0 +1,5 @@
+requests
+Pillow
+click
+tqdm
+urllib3
